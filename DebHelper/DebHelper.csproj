@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{B13FA100-B566-404B-A88C-A44530F42F8E}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AssemblyName>DebHelper</AssemblyName>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <ApplicationVersion>1.0.0.0</ApplicationVersion>
+    <RootNamespace>DebHelper</RootNamespace>
+    <Platforms>AnyCPU;x64</Platforms>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="sharpcompress" Version="0.24.0" />
+    <PackageReference Include="SharpZipLib" Version="1.2.0" />
+    <PackageReference Include="SymbolicLinkSupport" Version="1.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="SharpCompress" />
+  </ItemGroup>
+</Project>
