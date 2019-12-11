@@ -1,13 +1,23 @@
 ﻿using CrossBuilder;
 using CrossBuilder.Deb;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace CrossBuilder2
 {
     public class Program
     {
-        public static async Task Main(string[] args)
+        private readonly ConcurrentDictionary<string, Package> PackageQueue;
+
+        public Program()
+        {
+            PackageQueue = new ConcurrentDictionary<string, Package>();
+        }
+
+        public async Task Run()
         {
             var browser = new Browser("stretch", "armhf");
 
@@ -47,92 +57,72 @@ namespace CrossBuilder2
 
             var pack = browser.FindPackage(new Dependency(new Dependency.IndividualDependency
             {
-                Package = "libtiopencl1",
+                Package = "samba",
                 Comparer = Comparer.NoOp,
                 Version = ""
             }));
 
-            await pack.DownloadAndDecompress();
+            await RecurseDependencies(browser, pack);
 
-            //var index = new Dictionary<Repo, IList<PackageIndex>>();
+            Console.WriteLine($"About to download and install {PackageQueue.Count} packages");
 
-            //foreach (var repo in repos)
-            //{
-            //    index[repo] = await GetPackagesIndexFromCacheOrDownload(repo);
-            //}
+            foreach (var package in PackageQueue.Values)
+            {
+                Console.WriteLine($"Downloading {package.PackageName}...");
 
-            //var (foundPackageRepo, foundPackage) = FindMatchingPackage(index, new PackageDependency
-            //{
-            //    Package = "libtiopencl1",
-            //    Comparer = Comparer.NoOp,
-            //    Version = ""
-            //});
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                package.DownloadAndDecompress().ContinueWith(t =>
+                {
+                    if (!t.IsFaulted)
+                    {
+                        Console.WriteLine($"Downloaded and installed {package.PackageName} ({package.Version}) [{package.Architecture}]");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to install package {package.PackageName}");
+                        Console.WriteLine(t.Exception);
+                    }
 
-            //await Recurse(index, foundPackageRepo, foundPackage);
+                    PackageQueue.TryRemove(package.SHA256, out _);
 
-            //string[] debs =
-            //{
-            //    "libtiopencl1_01.01.17.01-git20181129.0-0rcnee0_stretch+20190103_armhf",
-            //    "ti-opencl_01.01.17.01-git20181129.0-0rcnee0_stretch+20190103_armhf",
-            //    "ti-tidl_01.02.02-bb.org-0.2-0rcnee3_stretch+20190924_armhf"
-            //};
+                    if (PackageQueue.Count == 0)
+                    {
+                        Console.WriteLine("We are done!");
+                    }
+                });
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            }
 
-            //foreach (var deb in debs)
-            //{
-            //    var debOut = $"debOut/{deb}";
-            //    var reader = new DebReader($@"D:\Git\CrossBuilder\CrossBuilder\debs\{deb}.deb");
-
-            //    Directory.CreateDirectory(debOut);
-
-            //    reader.Decompress(debOut, "debOut/fs");
-            //}
+            while (true) { }
         }
 
-        //private static BlockingCollection<string> AlreadyResolved = new BlockingCollection<string>();
+        private async Task RecurseDependencies(Browser browser, Package package)
+        {
+            if (PackageQueue.ContainsKey(package.SHA256))
+            {
+                return;
+            }
 
-        //private static async Task Recurse(IDictionary<Repo, IList<PackageIndex>> index, Repo repo, PackageIndex package, int level = 0)
-        //{
-        //    if (AlreadyResolved.Contains(package.SHA256))
-        //    {
-        //        return;
-        //    }
+            PackageQueue.TryAdd(package.SHA256, package);
 
-        //    Console.WriteLine($"Package: {package.Package}, Current level: {level}");
+            foreach (var dep in package.GetDependencies())
+            {
+                var depPackage = browser.FindPackage(dep);
 
-        //    var dependencies = package
-        //        .GetDependencies()
-        //        .Select(x => FindMatchingPackage(index, x));
+                if (depPackage == null)
+                {
+                    Console.WriteLine($"Could not resolve dependency: {dep.OrList[0].Package} ({dep.OrList[0].Package})");
 
-        //    try
-        //    {
-        //        await DownloadAndDecompress(repo, package);
+                    continue;
+                }
 
-        //        AlreadyResolved.Add(package.SHA256);
-        //    }
-        //    catch (Exception e)
-        //    {
-        //        Console.WriteLine($"Failed to download package {package.Package}: {e.Message}");
-        //    }
+                await RecurseDependencies(browser, depPackage);
+            }
+        }
 
-        //    foreach (var dep in dependencies)
-        //    {
-        //        await Recurse(index, dep.Item1, dep.Item2, level + 1);
-        //    }
-        //}
-
-        //private static async Task DownloadAndDecompress(Repo repo, PackageIndex package)
-        //{
-        //    var packageUri = $"{repo.RepoUrl}/{package.Filename}";
-        //    var packageCacheFile = $"{GetRepoCachePath(repo)}/{package.Filename}";
-
-        //    var packageFile = await DownloadOrGetCachedFile(packageUri, packageCacheFile);
-
-        //    var debOut = $"debOut/{package.Filename}";
-        //    var reader = new DebReader(packageFile);
-
-        //    Directory.CreateDirectory(debOut);
-
-        //    reader.Decompress(debOut, "debOut/fs");
-        //}
+        public static async Task Main(string[] args)
+        {
+            await new Program().Run();
+        }
     }
 }

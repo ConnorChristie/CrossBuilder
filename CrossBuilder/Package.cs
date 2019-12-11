@@ -1,6 +1,7 @@
 ﻿using CrossBuilder.Deb;
 using CrossBuilder.Downloaders;
 using DebHelper;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -100,9 +101,17 @@ namespace CrossBuilder
                     }
                     else
                     {
+                        depSegment.Package = dependencyStr;
                         depSegment.Comparer = Comparer.NoOp;
                         depSegment.Version = string.Empty;
-                        depSegment.Package = dependencyStr;
+                    }
+
+                    if (depSegment.Package.EndsWith(":any"))
+                    {
+                        Console.WriteLine($"[WARNING] Package '{depSegment.Package}' was configured for 'multi-arch' support but used the package name to symbolize that.");
+                        Console.WriteLine("  Aka we are removing the ':any' from the name and matching against that instead.");
+
+                        depSegment.Package = depSegment.Package.Replace(":any", "");
                     }
 
                     dependency.OrList[i] = depSegment;

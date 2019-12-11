@@ -22,16 +22,16 @@ namespace CrossBuilder
 
         public bool SatisfiesDependencyRequirement(Package otherPackage)
         {
-            foreach (var package in OrList)
+            foreach (var depPackage in OrList)
             {
-                if (package.Package != otherPackage.PackageName)
+                if (depPackage.Package != otherPackage.PackageName)
                 {
                     return false;
                 }
 
-                var comparison = DebVersionComparer.Compare(otherPackage.Version, package.Version);
+                var comparison = DebVersionComparer.Compare(otherPackage.Version, depPackage.Version);
 
-                switch (package.Comparer)
+                switch (depPackage.Comparer)
                 {
                     case Comparer.LessEq:
                         return comparison <= 0;
