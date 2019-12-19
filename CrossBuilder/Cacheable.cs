@@ -37,7 +37,13 @@ namespace CrossBuilder
 
         protected bool IsCached(string filename)
         {
-            return File.Exists(GetCachedPath(filename));
+            return IsCached(filename, out _);
+        }
+
+        protected bool IsCached(string filename, out string cachedPath)
+        {
+            cachedPath = GetCachedPath(filename);
+            return File.Exists(cachedPath);
         }
 
         protected void UnCache(string filename)

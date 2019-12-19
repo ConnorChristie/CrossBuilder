@@ -30,32 +30,112 @@ namespace CrossBuilder
         public Repository Repository;
 
         private readonly IRemoteDownloader downloader;
+        private readonly ElfReader elfReader;
 
         public Package(Repository repository)
         {
             Repository = repository;
             downloader = new HttpRemoteDownloader();
+            elfReader = new ElfReader();
         }
 
-        public async Task DownloadAndDecompress()
+        public async Task DownloadAndDecompress(bool ignoreCached = false)
         {
-            var relativePath = "packages/" + Filename;
+            var debCachePath = "packages/" + Filename;
+            var miscCachePath = "debOut/" + Filename;
+            var fsPath = "fs";
 
-            if (IsCached(relativePath) && false)
+            if (!ignoreCached && IsCached(debCachePath))
             {
-                // TODO: Bust cache if it's been too long or hash doesn't match now
+                // TODO: Bust cache if it's been too long or hash doesn't match anymore
                 return;
             }
 
             // Example url is "http://ftp.debian.org/debian" / "pool/main/g/glibc/libc-bin_2.29-3_armhf.deb"
             var fileStream = downloader.DownloadFile(Repository.RepoUrl + "/" + Filename);
 
-            var cachedFilePath = await CacheFile(relativePath, fileStream);
-            var cachedExtractionDir = CacheDirectory("debOut/" + Filename, true);
+            var cachedDeb = await CacheFile(debCachePath, fileStream);
+            var cachedMiscDir = CacheDirectory(miscCachePath, getParent: true);
 
-            var reader = new DebReader(cachedFilePath);
+            var reader = new DebReader(cachedDeb);
 
-            reader.Decompress(cachedExtractionDir, "fs");
+            reader.DecompressMisc(cachedMiscDir);
+            reader.DecompressData(fsPath, ProcessSharedLibrary);
+        }
+
+        private void ProcessSharedLibrary(string filePath)
+        {
+            var sdf = CompareLibVersions("libc.so.1.2.3", "libc.so.1.2.9");
+            var sdf1 = CompareLibVersions("libc.so.1.2.3", "libc.so.1.1.3");
+            var sdf2 = CompareLibVersions("libc.so.1", "libc.so.1.2");
+
+            var sdf3 = CompareLibVersions("libc.so.1.3", "libc.so.1.2");
+            var sdf4 = CompareLibVersions("libc.so.1.3.99", "libc.so.1.2.12");
+
+            if (filePath.Contains(".so") && elfReader.TryProcessElfFile(filePath, out var soName, out var depends))
+            {
+                // Only create a symlink if the SO name differs from the current file name
+                if (soName != null && soName != Path.GetFileName(filePath))
+                {
+                    var f = new DirectoryInfo(filePath);
+
+                    Console.WriteLine($"{soName} -> {Path.GetFileName(filePath)} : {f.Parent.FullName}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns a negative value if <paramref name="b"/> is greater than <paramref name="a"/>
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        private static int CompareLibVersions(string a, string b)
+        {
+            var p1 = 0;
+            var p2 = 0;
+
+            while (p1 < a.Length)
+            {
+                if (a.GetValueOrDefault(p1) >= '0' && a.GetValueOrDefault(p1) <= '9')
+                {
+                    if (b.GetValueOrDefault(p2) >= '0' && b.GetValueOrDefault(p2) <= '9')
+                    {
+                        /* Must compare this numerically.  */
+                        var val1 = a.GetValueOrDefault(p1++) - '0';
+                        var val2 = b.GetValueOrDefault(p2++) - '0';
+
+                        while (a.GetValueOrDefault(p1) >= '0' && a.GetValueOrDefault(p1) <= '9')
+                            val1 = val1 * 10 + a.GetValueOrDefault(p1++) - '0';
+                        while (b.TryGetValue(p2) >= '0' && b.GetValueOrDefault(p2) <= '9')
+                            val2 = val2 * 10 + b.GetValueOrDefault(p2++) - '0';
+
+                        if (val1 != val2)
+                        {
+                            return val1 - val2;
+                        }
+                    }
+                    else
+                    {
+                        return 1;
+                    }
+                }
+                else if (b.GetValueOrDefault(p2) >= '0' && b.GetValueOrDefault(p2) <= '9')
+                {
+                    return -1;
+                }
+                else if (a.GetValueOrDefault(p1) != b.GetValueOrDefault(p2))
+                {
+                    return a.GetValueOrDefault(p1) - b.GetValueOrDefault(p2);
+                }
+                else
+                {
+                    ++p1;
+                    ++p2;
+                }
+            }
+
+            return a.GetValueOrDefault(p1) - b.GetValueOrDefault(p2);
         }
 
         public IList<Dependency> GetDependencies()
@@ -121,6 +201,11 @@ namespace CrossBuilder
             }
 
             return dependencies;
+        }
+
+        public override string ToString()
+        {
+            return $"{PackageName} ({Version}) [{Architecture}]";
         }
     }
 }

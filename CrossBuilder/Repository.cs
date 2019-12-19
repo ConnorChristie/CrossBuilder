@@ -31,8 +31,12 @@ namespace CrossBuilder
             var (url, friendlyPath) = GetFullyQualifiedRepoPath();
             var remoteIndexUri = url + "/Packages";
 
-            using var fileStream = GetRemoteFileMaybeCompressed(remoteIndexUri);
-            var cachedFilePath = await CacheFile(friendlyPath + "/Packages", fileStream);
+            if (!IsCached(friendlyPath + "/Packages", out var cachedFilePath))
+            {
+                using var fileStream = GetRemoteFileMaybeCompressed(remoteIndexUri);
+                cachedFilePath = await CacheFile(friendlyPath + "/Packages", fileStream);
+            }
+
             var packageFileLines = await File.ReadAllLinesAsync(cachedFilePath);
 
             var packages = new List<Package>();

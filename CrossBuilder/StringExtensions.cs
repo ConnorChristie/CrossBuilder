@@ -15,6 +15,16 @@ namespace CrossBuilder
             return null;
         }
 
+        public static char GetValueOrDefault(this string str, int index, char def = '\0')
+        {
+            if (index < str.Length)
+            {
+                return str[index];
+            }
+
+            return def;
+        }
+
         public static void SplitIntoTwo(this string str, char c, out string left, out string right)
         {
             left = str;

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "CrossBuilder": {
+      "commandName": "Project",
+      "commandLineArgs": "libtiopencl1"
+    }
+  }
+}

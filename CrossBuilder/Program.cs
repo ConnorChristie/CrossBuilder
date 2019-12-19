@@ -1,9 +1,12 @@
 ﻿using CrossBuilder;
 using CrossBuilder.Deb;
+using ELFSharp.ELF;
+using ELFSharp.ELF.Sections;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace CrossBuilder2
@@ -17,7 +20,7 @@ namespace CrossBuilder2
             PackageQueue = new ConcurrentDictionary<string, Package>();
         }
 
-        public async Task Run()
+        public async Task Run(string packageName)
         {
             var browser = new Browser("stretch", "armhf");
 
@@ -57,10 +60,16 @@ namespace CrossBuilder2
 
             var pack = browser.FindPackage(new Dependency(new Dependency.IndividualDependency
             {
-                Package = "samba",
+                Package = packageName,
                 Comparer = Comparer.NoOp,
                 Version = ""
             }));
+
+            if (pack == null)
+            {
+                Console.WriteLine($"Could not find package '{packageName}'");
+                return;
+            }
 
             await RecurseDependencies(browser, pack);
 
@@ -71,15 +80,15 @@ namespace CrossBuilder2
                 Console.WriteLine($"Downloading {package.PackageName}...");
 
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                package.DownloadAndDecompress().ContinueWith(t =>
+                package.DownloadAndDecompress(ignoreCached: true).ContinueWith(t =>
                 {
                     if (!t.IsFaulted)
                     {
-                        Console.WriteLine($"Downloaded and installed {package.PackageName} ({package.Version}) [{package.Architecture}]");
+                        Console.WriteLine($"Downloaded and installed {package}");
                     }
                     else
                     {
-                        Console.WriteLine($"Failed to install package {package.PackageName}");
+                        Console.WriteLine($"Failed to install package '{package.PackageName}'");
                         Console.WriteLine(t.Exception);
                     }
 
@@ -88,6 +97,7 @@ namespace CrossBuilder2
                     if (PackageQueue.Count == 0)
                     {
                         Console.WriteLine("We are done!");
+                        Environment.Exit(0);
                     }
                 });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
@@ -122,7 +132,13 @@ namespace CrossBuilder2
 
         public static async Task Main(string[] args)
         {
-            await new Program().Run();
+            if (args.Length < 1)
+            {
+                Console.WriteLine("Try running: CrossBuilder.exe <package-name>");
+                return;
+            }
+
+            await new Program().Run(args[0]);
         }
     }
 }

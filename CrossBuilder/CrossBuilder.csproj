@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\elfsharp\ELFSharp\ELFSharp.csproj" />
     <ProjectReference Include="..\DebHelper\DebHelper.csproj" />
   </ItemGroup>
 
