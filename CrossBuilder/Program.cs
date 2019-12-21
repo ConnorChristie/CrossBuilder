@@ -1,12 +1,8 @@
 ﻿using CrossBuilder;
 using CrossBuilder.Deb;
-using ELFSharp.ELF;
-using ELFSharp.ELF.Sections;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace CrossBuilder2
@@ -15,16 +11,14 @@ namespace CrossBuilder2
     {
         private readonly ConcurrentDictionary<string, Package> PackageQueue;
 
+        private readonly Browser Browser;
+
         public Program()
         {
             PackageQueue = new ConcurrentDictionary<string, Package>();
-        }
 
-        public async Task Run(string packageName)
-        {
-            var browser = new Browser("stretch", "armhf");
-
-            browser.SetRepos(new List<Repository>
+            Browser = new Browser("stretch", "armhf");
+            Browser.SetRepos(new List<Repository>
             {
                 new Repository
                 {
@@ -55,23 +49,26 @@ namespace CrossBuilder2
                     Architecture = "armhf"
                 }
             });
+        }
 
-            await browser.UpdatePackageCache();
+        public async Task Install(string packageName)
+        {
+            await Browser.UpdatePackageCache();
 
-            var pack = browser.FindPackage(new Dependency(new Dependency.IndividualDependency
+            var basePackage = Browser.FindPackage(new Dependency(new Dependency.IndividualDependency
             {
                 Package = packageName,
                 Comparer = Comparer.NoOp,
                 Version = ""
             }));
 
-            if (pack == null)
+            if (basePackage == null)
             {
                 Console.WriteLine($"Could not find package '{packageName}'");
                 return;
             }
 
-            await RecurseDependencies(browser, pack);
+            await RecurseDependencies(Browser, basePackage);
 
             Console.WriteLine($"About to download and install {PackageQueue.Count} packages");
 
@@ -130,15 +127,46 @@ namespace CrossBuilder2
             }
         }
 
-        public static async Task Main(string[] args)
+        public async Task Uninstall(string packageName)
         {
-            if (args.Length < 1)
+            await Browser.UpdatePackageCache();
+
+            var package = Browser.FindPackage(new Dependency(new Dependency.IndividualDependency
             {
-                Console.WriteLine("Try running: CrossBuilder.exe <package-name>");
+                Package = packageName,
+                Comparer = Comparer.NoOp,
+                Version = ""
+            }));
+
+            if (package == null)
+            {
+                Console.WriteLine($"Could not find package '{packageName}'");
                 return;
             }
 
-            await new Program().Run(args[0]);
+            package.Uninstall();
+        }
+
+        public static async Task Main(string[] args)
+        {
+            if (args.Length < 2)
+            {
+                Console.WriteLine("Try running: CrossBuilder.exe <install|uninstall> <package-name>");
+                return;
+            }
+
+            var program = new Program();
+            var method = args[0];
+
+            switch (method.ToLower())
+            {
+                case "install":
+                    await program.Install(args[1]);
+                    break;
+                case "uninstall":
+                    await program.Uninstall(args[1]);
+                    break;
+            }
         }
     }
 }

@@ -32,6 +32,8 @@ namespace CrossBuilder
         private readonly IRemoteDownloader downloader;
         private readonly ElfReader elfReader;
 
+        private readonly string fsPath = "fsNew";
+
         public Package(Repository repository)
         {
             Repository = repository;
@@ -41,9 +43,7 @@ namespace CrossBuilder
 
         public async Task DownloadAndDecompress(bool ignoreCached = false)
         {
-            var debCachePath = "packages/" + Filename;
-            var miscCachePath = "debOut/" + Filename;
-            var fsPath = "fs";
+            var debCachePath = "packages" + Path.DirectorySeparatorChar + Filename;
 
             if (!ignoreCached && IsCached(debCachePath))
             {
@@ -51,19 +51,38 @@ namespace CrossBuilder
                 return;
             }
 
-            // Example url is "http://ftp.debian.org/debian" / "pool/main/g/glibc/libc-bin_2.29-3_armhf.deb"
             var fileStream = downloader.DownloadFile(Repository.RepoUrl + "/" + Filename);
-
             var cachedDeb = await CacheFile(debCachePath, fileStream);
-            var cachedMiscDir = CacheDirectory(miscCachePath, getParent: true);
+
+            // TODO: do we need the control files for anything? it does have the md5sums in there
 
             var reader = new DebReader(cachedDeb);
-
-            reader.DecompressMisc(cachedMiscDir);
-            reader.DecompressData(fsPath, ProcessSharedLibrary);
+            reader.DecompressData(fsPath, OnFileDecompressed);
         }
 
-        private void ProcessSharedLibrary(string filePath)
+        public void Uninstall()
+        {
+            var debCachePath = "packages" + Path.DirectorySeparatorChar + Filename;
+
+            if (!IsCached(debCachePath))
+            {
+                // TODO: Maybe re-download the package so we can get the list of files it extracted?
+                throw new Exception($"The package '{PackageName}' is no longer cached so we can't figure out what files it laid down.");
+            }
+
+            var reader = new DebReader(GetCachedPath(debCachePath));
+
+            foreach (var file in reader.GetDataFileList())
+            {
+                // TODO: Do we need to delete all the symlinks pointing to these files?
+
+                Console.WriteLine($"Removing: {file}");
+
+                File.Delete(fsPath + Path.DirectorySeparatorChar + file);
+            }
+        }
+
+        private void OnFileDecompressed(string filePath)
         {
             var sdf = CompareLibVersions("libc.so.1.2.3", "libc.so.1.2.9");
             var sdf1 = CompareLibVersions("libc.so.1.2.3", "libc.so.1.1.3");

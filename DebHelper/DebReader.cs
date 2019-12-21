@@ -3,6 +3,7 @@ using SharpCompress.Common;
 using SharpCompress.Readers;
 using SymbolicLinkSupport;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -29,23 +30,33 @@ namespace DebHelper
 
         public void DecompressMisc(string outFolder)
         {
-            File.WriteAllBytes(Path.Combine(outFolder, debianBinary.Identifer), debianBinary.Content);
-            DecompressArchive(outFolder, control, true);
+            var length = control.Identifer.IndexOf('.');
+            outFolder = Path.Combine(outFolder, control.Identifer.Substring(0, length));
+
+            DecompressArchive(outFolder, control);
         }
 
         public void DecompressData(string outFolder, Action<string> onFileDecompressed)
         {
-            DecompressArchive(outFolder, data, false, onFileDecompressed);
+            DecompressArchive(outFolder, data, onFileDecompressed);
         }
 
-        private void DecompressArchive(string outFolder, InnerFile innerFile, bool includeInnerFileName, Action<string> onFileDecompressed = null)
+        public IEnumerable<string> GetDataFileList()
         {
-            if (includeInnerFileName)
-            {
-                var length = innerFile.Identifer.IndexOf('.');
-                outFolder = Path.Combine(outFolder, innerFile.Identifer.Substring(0, length));
-            }
+            using var memoryStream = new MemoryStream(data.Content);
+            using var reader = ReaderFactory.Open(memoryStream);
 
+            while (reader.MoveToNextEntry())
+            {
+                if (!reader.Entry.IsDirectory)
+                {
+                    yield return reader.Entry.Key;
+                }
+            }
+        }
+
+        private void DecompressArchive(string outFolder, InnerFile innerFile, Action<string> onFileDecompressed = null)
+        {
             Directory.CreateDirectory(outFolder);
 
             using var memoryStream = new MemoryStream(innerFile.Content);
@@ -53,14 +64,16 @@ namespace DebHelper
 
             while (reader.MoveToNextEntry())
             {
+                var outFile = outFolder + Path.DirectorySeparatorChar + reader.Entry.Key;
+
                 reader.WriteEntryToDirectory(outFolder, new ExtractionOptions
                 {
-                    WriteSymbolicLink = (source, dst) =>
+                    WriteSymbolicLink = (symlink, orig) =>
                     {
                         try
                         {
-                            var file = new FileInfo(source);
-                            file.CreateSymbolicLink(dst, true);
+                            var origFile = new FileInfo(new FileInfo(symlink).Directory.FullName + Path.DirectorySeparatorChar + orig);
+                            origFile.CreateSymbolicLink(symlink, false);
                         }
                         catch (COMException e)
                         {
@@ -72,9 +85,14 @@ namespace DebHelper
                     Overwrite = true
                 });
 
-                if (onFileDecompressed != null && !reader.Entry.IsDirectory && reader.Entry.Size > 0)
+                if (!reader.Entry.IsDirectory && reader.Entry.Size > 0)
                 {
-                    onFileDecompressed(outFolder + "/" + reader.Entry.Key);
+                    if (reader.Entry.LastModifiedTime.HasValue)
+                    {
+                        File.SetLastWriteTimeUtc(outFile, reader.Entry.LastModifiedTime.Value);
+                    }
+
+                    onFileDecompressed?.Invoke(outFile);
                 }
             }
         }

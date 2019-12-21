@@ -32,7 +32,7 @@ namespace CrossBuilder
 
         protected string GetCachedPath(string filename)
         {
-            return CachePath + "/" + filename;
+            return CachePath + Path.DirectorySeparatorChar + filename;
         }
 
         protected bool IsCached(string filename)
