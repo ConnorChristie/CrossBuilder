@@ -2,7 +2,7 @@
   "profiles": {
     "CrossBuilder": {
       "commandName": "Project",
-      "commandLineArgs": "uninstall libtiopencl1"
+      "commandLineArgs": "install libtiopencl1"
     }
   }
 }

@@ -1,4 +1,5 @@
-﻿using CrossBuilder;
+﻿using CommandLine;
+using CrossBuilder;
 using CrossBuilder.Deb;
 using System;
 using System.Collections.Concurrent;
@@ -51,53 +52,56 @@ namespace CrossBuilder2
             });
         }
 
-        public async Task Install(string packageName)
+        public async Task Install(InstallOptions opts)
         {
             await Browser.UpdatePackageCache();
 
-            var basePackage = Browser.FindPackage(new Dependency(new Dependency.IndividualDependency
+            foreach (var packageName in opts.Packages)
             {
-                Package = packageName,
-                Comparer = Comparer.NoOp,
-                Version = ""
-            }));
+                var basePackage = Browser.FindPackage(new Dependency(new Dependency.IndividualDependency
+                {
+                    Package = packageName,
+                    Comparer = Comparer.NoOp,
+                    Version = ""
+                }));
 
-            if (basePackage == null)
-            {
-                Console.WriteLine($"Could not find package '{packageName}'");
-                return;
-            }
+                if (basePackage == null)
+                {
+                    Console.WriteLine($"Could not find package '{packageName}'");
+                    return;
+                }
 
-            await RecurseDependencies(Browser, basePackage);
+                await RecurseDependencies(Browser, basePackage);
 
-            Console.WriteLine($"About to download and install {PackageQueue.Count} packages");
+                Console.WriteLine($"About to download and install {PackageQueue.Count} packages");
 
-            foreach (var package in PackageQueue.Values)
-            {
-                Console.WriteLine($"Downloading {package.PackageName}...");
+                foreach (var package in PackageQueue.Values)
+                {
+                    Console.WriteLine($"Downloading {package.PackageName}...");
 
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                package.DownloadAndDecompress(ignoreCached: true).ContinueWith(t =>
-                {
-                    if (!t.IsFaulted)
+                    package.DownloadAndDecompress(ignoreCached: false).ContinueWith(t =>
                     {
-                        Console.WriteLine($"Downloaded and installed {package}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Failed to install package '{package.PackageName}'");
-                        Console.WriteLine(t.Exception);
-                    }
+                        if (!t.IsFaulted)
+                        {
+                            Console.WriteLine($"Downloaded and installed {package}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Failed to install package '{package.PackageName}'");
+                            Console.WriteLine(t.Exception);
+                        }
 
-                    PackageQueue.TryRemove(package.SHA256, out _);
+                        PackageQueue.TryRemove(package.SHA256, out _);
 
-                    if (PackageQueue.Count == 0)
-                    {
-                        Console.WriteLine("We are done!");
-                        Environment.Exit(0);
-                    }
-                });
+                        if (PackageQueue.Count == 0)
+                        {
+                            Console.WriteLine($"Finished installing {basePackage}.");
+                            //Environment.Exit(0);
+                        }
+                    });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                }
             }
 
             while (true) { }
@@ -127,46 +131,60 @@ namespace CrossBuilder2
             }
         }
 
-        public async Task Uninstall(string packageName)
+        public async Task Uninstall(UninstallOptions opts)
         {
             await Browser.UpdatePackageCache();
 
-            var package = Browser.FindPackage(new Dependency(new Dependency.IndividualDependency
+            foreach (var packageName in opts.Packages)
             {
-                Package = packageName,
-                Comparer = Comparer.NoOp,
-                Version = ""
-            }));
+                var package = Browser.FindPackage(new Dependency(new Dependency.IndividualDependency
+                {
+                    Package = packageName,
+                    Comparer = Comparer.NoOp,
+                    Version = ""
+                }));
 
-            if (package == null)
-            {
-                Console.WriteLine($"Could not find package '{packageName}'");
-                return;
+                if (package == null)
+                {
+                    Console.WriteLine($"Could not find package '{packageName}'");
+                    return;
+                }
+
+                package.Uninstall();
             }
-
-            package.Uninstall();
         }
 
         public static async Task Main(string[] args)
         {
-            if (args.Length < 2)
-            {
-                Console.WriteLine("Try running: CrossBuilder.exe <install|uninstall> <package-name>");
-                return;
-            }
-
             var program = new Program();
-            var method = args[0];
 
-            switch (method.ToLower())
-            {
-                case "install":
-                    await program.Install(args[1]);
-                    break;
-                case "uninstall":
-                    await program.Uninstall(args[1]);
-                    break;
-            }
+            await Parser.Default.ParseArguments<InstallOptions, UninstallOptions>(args)
+                .MapResult(
+                    (InstallOptions opts) => program.Install(opts),
+                    (UninstallOptions opts) => program.Uninstall(opts),
+                    errs => Task.FromResult(0));
+        }
+
+        public abstract class Options
+        {
+            public abstract IEnumerable<string> Packages { get; set; }
+
+            [Option('f', "force", Required = false, HelpText = "Forces the package to be fully re-installed.")]
+            public bool Force { get; set; }
+        }
+
+        [Verb("install", HelpText = "Installs a package.")]
+        public class InstallOptions : Options
+        {
+            [Value(0, Required = true, HelpText = "Packages to install.")]
+            public override IEnumerable<string> Packages { get; set; }
+        }
+
+        [Verb("uninstall", HelpText = "Uninstalls a package.")]
+        public class UninstallOptions : Options
+        {
+            [Value(0, Required = true, HelpText = "Packages to uninstall.")]
+            public override IEnumerable<string> Packages { get; set; }
         }
     }
 }

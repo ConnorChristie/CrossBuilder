@@ -1,6 +1,7 @@
 ﻿using CrossBuilder.Deb;
 using CrossBuilder.Downloaders;
 using DebHelper;
+using SymbolicLinkSupport;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -45,18 +46,17 @@ namespace CrossBuilder
         {
             var debCachePath = "packages" + Path.DirectorySeparatorChar + Filename;
 
-            if (!ignoreCached && IsCached(debCachePath))
+            if (ignoreCached || !IsCached(debCachePath))
             {
-                // TODO: Bust cache if it's been too long or hash doesn't match anymore
-                return;
+                var fileStream = downloader.DownloadFile(Repository.RepoUrl + "/" + Filename);
+
+                await CacheFile(debCachePath, fileStream);
             }
 
-            var fileStream = downloader.DownloadFile(Repository.RepoUrl + "/" + Filename);
-            var cachedDeb = await CacheFile(debCachePath, fileStream);
-
+            // TODO: Bust cache if it's been too long or hash doesn't match anymore
             // TODO: do we need the control files for anything? it does have the md5sums in there
 
-            var reader = new DebReader(cachedDeb);
+            var reader = new DebReader(GetCachedPath(debCachePath));
             reader.DecompressData(fsPath, OnFileDecompressed);
         }
 
@@ -84,21 +84,82 @@ namespace CrossBuilder
 
         private void OnFileDecompressed(string filePath)
         {
-            var sdf = CompareLibVersions("libc.so.1.2.3", "libc.so.1.2.9");
-            var sdf1 = CompareLibVersions("libc.so.1.2.3", "libc.so.1.1.3");
-            var sdf2 = CompareLibVersions("libc.so.1", "libc.so.1.2");
-
-            var sdf3 = CompareLibVersions("libc.so.1.3", "libc.so.1.2");
-            var sdf4 = CompareLibVersions("libc.so.1.3.99", "libc.so.1.2.12");
-
             if (filePath.Contains(".so") && elfReader.TryProcessElfFile(filePath, out var soName, out var depends))
             {
-                // Only create a symlink if the SO name differs from the current file name
-                if (soName != null && soName != Path.GetFileName(filePath))
+                if (soName == null)
                 {
-                    var f = new DirectoryInfo(filePath);
+                    return;
+                }
 
-                    Console.WriteLine($"{soName} -> {Path.GetFileName(filePath)} : {f.Parent.FullName}");
+                // Only create a symlink if the soname differs from the current file name
+                if (soName != Path.GetFileName(filePath))
+                {
+                    var file = new FileInfo(filePath);
+                    string soSymlinkName = null;
+
+                    // If the current path ends with "lib" then we are not inside an arch specific directory
+                    if (file.Directory.FullName.EndsWith("lib"))
+                    {
+                        soSymlinkName = file.Directory.FullName + Path.DirectorySeparatorChar + soName;
+                    }
+                    else if (file.Directory.Parent.FullName.EndsWith("lib"))
+                    {
+                        soSymlinkName = file.Directory.Parent.FullName + Path.DirectorySeparatorChar + soName;
+                    }
+
+                    if (soSymlinkName != null)
+                    {
+                        var doLink = true;
+                        var soSymlink = new FileInfo(soSymlinkName);
+
+                        if (soSymlink.Exists)
+                        {
+                            var existingTarget = new FileInfo(soSymlink.GetSymbolicLinkTarget());
+
+                            if (CompareLibVersions(file.Name, existingTarget.Name) > 0)
+                            {
+                                Console.WriteLine($"Updating symlink '{soSymlink.Name}' from '{existingTarget.Name}' to '{file.Name}'.");
+
+                                soSymlink.Delete();
+                            }
+                            else
+                            {
+                                // Version being installed is either the same version or a lower version than what's already installed
+                                // TODO: Add override option in cases of downgrading
+                                doLink = false;
+                            }
+                        }
+
+                        if (doLink)
+                        {
+                            file.CreateSymbolicLink(soSymlinkName, false);
+
+                            var doLibLink = true;
+                            var libPath = soSymlink.Directory.FullName + Path.DirectorySeparatorChar + soName.Substring(0, soName.LastIndexOf(".so") + 3);
+                            var libFile = new FileInfo(libPath);
+
+                            if (libFile.Exists)
+                            {
+                                var existingTarget = new FileInfo(libFile.GetSymbolicLinkTarget());
+
+                                if (existingTarget.Name != soSymlink.Name)
+                                {
+                                    Console.WriteLine($"Updating library symlink '{libFile.Name}' from '{existingTarget.Name}' to '{soSymlink.Name}'.");
+
+                                    libFile.Delete();
+                                }
+                                else
+                                {
+                                    doLibLink = false;
+                                }
+                            }
+
+                            if (doLibLink)
+                            {
+                                soSymlink.CreateSymbolicLink(libPath, false);
+                            }
+                        }
+                    }
                 }
             }
         }

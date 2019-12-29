@@ -1,11 +1,9 @@
 ﻿using DebHelper.Implementation;
 using SharpCompress.Common;
 using SharpCompress.Readers;
-using SymbolicLinkSupport;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
 
 namespace DebHelper
 {
@@ -66,32 +64,29 @@ namespace DebHelper
             {
                 var outFile = outFolder + Path.DirectorySeparatorChar + reader.Entry.Key;
 
-                reader.WriteEntryToDirectory(outFolder, new ExtractionOptions
+                var wasExtracted = reader.WriteEntryToDirectoryWithFeedback(outFolder, new ExtractionOptions
                 {
-                    WriteSymbolicLink = (symlink, orig) =>
+                    WriteSymbolicLink = (symlinkName, destination) =>
                     {
-                        try
-                        {
-                            var origFile = new FileInfo(new FileInfo(symlink).Directory.FullName + Path.DirectorySeparatorChar + orig);
-                            origFile.CreateSymbolicLink(symlink, false);
-                        }
-                        catch (COMException e)
-                        {
-                            // HResult of -2147024896 is OK
-                            if (e.HResult != -2147024896) throw e;
-                        }
+                        Console.WriteLine($"Skipping symlink extraction for '{new FileInfo(symlinkName).Name}'.");
+
+                        //var symlink = new FileInfo(symlinkName);
+                        //var origFile = new FileInfo(symlink.Directory.FullName + Path.DirectorySeparatorChar + destination);
+
+                        //if (symlink.Exists)
+                        //{
+                        //    symlink.Delete();
+                        //}
+
+                        //origFile.CreateSymbolicLink(symlinkName, false);
                     },
+                    Overwrite = false,
                     ExtractFullPath = true,
-                    Overwrite = true
+                    PreserveFileTime = true
                 });
 
-                if (!reader.Entry.IsDirectory && reader.Entry.Size > 0)
+                if (wasExtracted)
                 {
-                    if (reader.Entry.LastModifiedTime.HasValue)
-                    {
-                        File.SetLastWriteTimeUtc(outFile, reader.Entry.LastModifiedTime.Value);
-                    }
-
                     onFileDecompressed?.Invoke(outFile);
                 }
             }
