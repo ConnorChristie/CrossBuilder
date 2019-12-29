@@ -4,6 +4,8 @@ using CrossBuilder.Deb;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace CrossBuilder2
@@ -11,6 +13,7 @@ namespace CrossBuilder2
     public class Program
     {
         private readonly ConcurrentDictionary<string, Package> PackageQueue;
+        private readonly Stopwatch StopWatch = new Stopwatch();
 
         private readonly Browser Browser;
 
@@ -54,6 +57,12 @@ namespace CrossBuilder2
 
         public async Task Install(InstallOptions opts)
         {
+            StopWatch.Start();
+
+            Directory.CreateDirectory(opts.Sysroot);
+
+            Console.WriteLine($"Installing packages to '{opts.Sysroot}'");
+
             await Browser.UpdatePackageCache();
 
             foreach (var packageName in opts.Packages)
@@ -68,53 +77,69 @@ namespace CrossBuilder2
                 if (basePackage == null)
                 {
                     Console.WriteLine($"Could not find package '{packageName}'");
-                    return;
+                    continue;
                 }
 
-                await RecurseDependencies(Browser, basePackage);
+                await RecursivelyFindDependencies(PackageQueue, Browser, basePackage);
+            }
 
-                Console.WriteLine($"About to download and install {PackageQueue.Count} packages");
+            var installCount = PackageQueue.Count;
 
-                foreach (var package in PackageQueue.Values)
-                {
-                    Console.WriteLine($"Downloading {package.PackageName}...");
+            Console.WriteLine($"About to download and install {installCount} packages.");
+
+            foreach (var package in PackageQueue.Values)
+            {
+                Console.WriteLine($"Downloading {package.PackageName}...");
 
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                    package.DownloadAndDecompress(ignoreCached: false).ContinueWith(t =>
+                package.DownloadAndDecompress(opts.Sysroot, opts.Force, ignoreCached: false).ContinueWith(t =>
+                {
+                    if (!t.IsFaulted)
                     {
-                        if (!t.IsFaulted)
-                        {
-                            Console.WriteLine($"Downloaded and installed {package}");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Failed to install package '{package.PackageName}'");
-                            Console.WriteLine(t.Exception);
-                        }
+                        Console.WriteLine($"Downloaded and installed {package}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to install package '{package.PackageName}'");
+                        Console.WriteLine(t.Exception);
+                    }
 
-                        PackageQueue.TryRemove(package.SHA256, out _);
+                    PackageQueue.TryRemove(package.SHA256, out _);
 
-                        if (PackageQueue.Count == 0)
-                        {
-                            Console.WriteLine($"Finished installing {basePackage}.");
-                            //Environment.Exit(0);
-                        }
-                    });
+                    if (PackageQueue.Count == 0)
+                    {
+                        DoneInstalling(opts.Packages, installCount);
+                    }
+                });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                }
             }
 
             while (true) { }
         }
 
-        private async Task RecurseDependencies(Browser browser, Package package)
+        private void DoneInstalling(IEnumerable<string> packages, int installCount)
         {
-            if (PackageQueue.ContainsKey(package.SHA256))
+            StopWatch.Stop();
+
+            var ts = StopWatch.Elapsed;
+            var elapsedTime = string.Format("{0:00}:{1:00}.{2:00}",
+                ts.Minutes, ts.Seconds,
+                ts.Milliseconds / 10);
+
+            Console.WriteLine($"Finished installing {string.Join(", ", packages)}");
+            Console.WriteLine($"Total time to install {installCount} packages: {elapsedTime}");
+
+            Environment.Exit(0);
+        }
+
+        private static async Task RecursivelyFindDependencies(ConcurrentDictionary<string, Package> packageQueue, Browser browser, Package package)
+        {
+            if (packageQueue.ContainsKey(package.SHA256))
             {
                 return;
             }
 
-            PackageQueue.TryAdd(package.SHA256, package);
+            packageQueue.TryAdd(package.SHA256, package);
 
             foreach (var dep in package.GetDependencies())
             {
@@ -123,11 +148,10 @@ namespace CrossBuilder2
                 if (depPackage == null)
                 {
                     Console.WriteLine($"Could not resolve dependency: {dep.OrList[0].Package} ({dep.OrList[0].Package})");
-
                     continue;
                 }
 
-                await RecurseDependencies(browser, depPackage);
+                await RecursivelyFindDependencies(packageQueue, browser, depPackage);
             }
         }
 
@@ -147,10 +171,10 @@ namespace CrossBuilder2
                 if (package == null)
                 {
                     Console.WriteLine($"Could not find package '{packageName}'");
-                    return;
+                    continue;
                 }
 
-                package.Uninstall();
+                package.Uninstall(opts.Sysroot);
             }
         }
 
@@ -169,8 +193,11 @@ namespace CrossBuilder2
         {
             public abstract IEnumerable<string> Packages { get; set; }
 
-            [Option('f', "force", Required = false, HelpText = "Forces the package to be fully re-installed.")]
+            [Option('f', "force", HelpText = "Overwrites any files with the same name.")]
             public bool Force { get; set; }
+
+            [Option('s', "sysroot", Default = "fsNew", HelpText = "Base path to install packages to.")]
+            public string Sysroot { get; set; }
         }
 
         [Verb("install", HelpText = "Installs a package.")]

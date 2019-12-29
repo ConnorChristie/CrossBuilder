@@ -33,7 +33,7 @@ namespace CrossBuilder
         private readonly IRemoteDownloader downloader;
         private readonly ElfReader elfReader;
 
-        private readonly string fsPath = "fsNew";
+        //private readonly string fsPath = "fsNew";
 
         public Package(Repository repository)
         {
@@ -42,7 +42,7 @@ namespace CrossBuilder
             elfReader = new ElfReader();
         }
 
-        public async Task DownloadAndDecompress(bool ignoreCached = false)
+        public async Task DownloadAndDecompress(string sysroot, bool overwrite, bool ignoreCached = false)
         {
             var debCachePath = "packages" + Path.DirectorySeparatorChar + Filename;
 
@@ -57,10 +57,10 @@ namespace CrossBuilder
             // TODO: do we need the control files for anything? it does have the md5sums in there
 
             var reader = new DebReader(GetCachedPath(debCachePath));
-            reader.DecompressData(fsPath, OnFileDecompressed);
+            reader.DecompressData(sysroot, overwrite, OnFileDecompressed);
         }
 
-        public void Uninstall()
+        public void Uninstall(string sysroot)
         {
             var debCachePath = "packages" + Path.DirectorySeparatorChar + Filename;
 
@@ -78,13 +78,13 @@ namespace CrossBuilder
 
                 Console.WriteLine($"Removing: {file}");
 
-                File.Delete(fsPath + Path.DirectorySeparatorChar + file);
+                File.Delete(sysroot + Path.DirectorySeparatorChar + file);
             }
         }
 
-        private void OnFileDecompressed(string filePath)
+        private void OnFileDecompressed(FileInfo file)
         {
-            if (filePath.Contains(".so") && elfReader.TryProcessElfFile(filePath, out var soName, out var depends))
+            if (file.Name.Contains(".so") && elfReader.TryProcessElfFile(file.FullName, out var soName, out var depends))
             {
                 if (soName == null)
                 {
@@ -92,9 +92,8 @@ namespace CrossBuilder
                 }
 
                 // Only create a symlink if the soname differs from the current file name
-                if (soName != Path.GetFileName(filePath))
+                if (soName != file.Name)
                 {
-                    var file = new FileInfo(filePath);
                     string soSymlinkName = null;
 
                     // If the current path ends with "lib" then we are not inside an arch specific directory
@@ -118,7 +117,7 @@ namespace CrossBuilder
 
                             if (CompareLibVersions(file.Name, existingTarget.Name) > 0)
                             {
-                                Console.WriteLine($"Updating symlink '{soSymlink.Name}' from '{existingTarget.Name}' to '{file.Name}'.");
+                                Console.WriteLine($"[INFO] Updating symlink '{soSymlink.Name}' from '{existingTarget.Name}' to '{file.Name}'.");
 
                                 soSymlink.Delete();
                             }
@@ -144,7 +143,7 @@ namespace CrossBuilder
 
                                 if (existingTarget.Name != soSymlink.Name)
                                 {
-                                    Console.WriteLine($"Updating library symlink '{libFile.Name}' from '{existingTarget.Name}' to '{soSymlink.Name}'.");
+                                    Console.WriteLine($"[INFO] Updating library symlink '{libFile.Name}' from '{existingTarget.Name}' to '{soSymlink.Name}'.");
 
                                     libFile.Delete();
                                 }

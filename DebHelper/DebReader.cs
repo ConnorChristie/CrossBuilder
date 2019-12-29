@@ -34,9 +34,9 @@ namespace DebHelper
             DecompressArchive(outFolder, control);
         }
 
-        public void DecompressData(string outFolder, Action<string> onFileDecompressed)
+        public void DecompressData(string outFolder, bool overwrite, Action<FileInfo> onFileDecompressed)
         {
-            DecompressArchive(outFolder, data, onFileDecompressed);
+            DecompressArchive(outFolder, data, overwrite, onFileDecompressed);
         }
 
         public IEnumerable<string> GetDataFileList()
@@ -53,7 +53,7 @@ namespace DebHelper
             }
         }
 
-        private void DecompressArchive(string outFolder, InnerFile innerFile, Action<string> onFileDecompressed = null)
+        private void DecompressArchive(string outFolder, InnerFile innerFile, bool overwrite = false, Action<FileInfo> onFileDecompressed = null)
         {
             Directory.CreateDirectory(outFolder);
 
@@ -62,13 +62,14 @@ namespace DebHelper
 
             while (reader.MoveToNextEntry())
             {
-                var outFile = outFolder + Path.DirectorySeparatorChar + reader.Entry.Key;
+                var outFile = new FileInfo(outFolder + Path.DirectorySeparatorChar + reader.Entry.Key);
 
                 var wasExtracted = reader.WriteEntryToDirectoryWithFeedback(outFolder, new ExtractionOptions
                 {
                     WriteSymbolicLink = (symlinkName, destination) =>
                     {
-                        Console.WriteLine($"Skipping symlink extraction for '{new FileInfo(symlinkName).Name}'.");
+                        // TODO: The ldconfig logic handles the symlink creation for so files. We might need to keep this for non-so files?
+                        Console.WriteLine($"[TRACE] Skipping symlink extraction for '{new FileInfo(symlinkName).Name}'.");
 
                         //var symlink = new FileInfo(symlinkName);
                         //var origFile = new FileInfo(symlink.Directory.FullName + Path.DirectorySeparatorChar + destination);
@@ -80,10 +81,15 @@ namespace DebHelper
 
                         //origFile.CreateSymbolicLink(symlinkName, false);
                     },
-                    Overwrite = false,
+                    Overwrite = overwrite,
                     ExtractFullPath = true,
                     PreserveFileTime = true
                 });
+
+                if (!overwrite && !wasExtracted && outFile.Exists)
+                {
+                    Console.WriteLine($"[TRACE] Skipping extraction of '{outFile.Name}' because the file already exists and overwrite is false.");
+                }
 
                 if (wasExtracted)
                 {
