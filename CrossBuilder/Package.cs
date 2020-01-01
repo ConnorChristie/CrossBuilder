@@ -117,7 +117,7 @@ namespace CrossBuilder
 
                             if (CompareLibVersions(file.Name, existingTarget.Name) > 0)
                             {
-                                Console.WriteLine($"[INFO] Updating symlink '{soSymlink.Name}' from '{existingTarget.Name}' to '{file.Name}'.");
+                                Console.WriteLine($"[INFO] Updating symlink '{soSymlink.Name}' from '{existingTarget.Name}' to '{file.Name}'");
 
                                 soSymlink.Delete();
                             }
@@ -143,7 +143,7 @@ namespace CrossBuilder
 
                                 if (existingTarget.Name != soSymlink.Name)
                                 {
-                                    Console.WriteLine($"[INFO] Updating library symlink '{libFile.Name}' from '{existingTarget.Name}' to '{soSymlink.Name}'.");
+                                    Console.WriteLine($"[INFO] Updating library symlink '{libFile.Name}' from '{existingTarget.Name}' to '{soSymlink.Name}'");
 
                                     libFile.Delete();
                                 }

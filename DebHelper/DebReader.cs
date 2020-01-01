@@ -69,7 +69,7 @@ namespace DebHelper
                     WriteSymbolicLink = (symlinkName, destination) =>
                     {
                         // TODO: The ldconfig logic handles the symlink creation for so files. We might need to keep this for non-so files?
-                        Console.WriteLine($"[TRACE] Skipping symlink extraction for '{new FileInfo(symlinkName).Name}'.");
+                        Console.WriteLine($"[TRACE] Skipping symlink extraction for '{new FileInfo(symlinkName).Name}'");
 
                         //var symlink = new FileInfo(symlinkName);
                         //var origFile = new FileInfo(symlink.Directory.FullName + Path.DirectorySeparatorChar + destination);

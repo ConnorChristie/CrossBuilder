@@ -6,6 +6,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Security.Permissions;
 using System.Threading.Tasks;
 
 namespace CrossBuilder2
@@ -91,7 +93,7 @@ namespace CrossBuilder2
             {
                 Console.WriteLine($"Downloading {package.PackageName}...");
 
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+#pragma warning disable CS4014
                 package.DownloadAndDecompress(opts.Sysroot, opts.Force, ignoreCached: false).ContinueWith(t =>
                 {
                     if (!t.IsFaulted)
@@ -100,6 +102,8 @@ namespace CrossBuilder2
                     }
                     else
                     {
+                        // TODO: Should probably retry
+
                         Console.WriteLine($"Failed to install package '{package.PackageName}'");
                         Console.WriteLine(t.Exception);
                     }
@@ -111,7 +115,7 @@ namespace CrossBuilder2
                         DoneInstalling(opts.Packages, installCount);
                     }
                 });
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+#pragma warning restore CS4014
             }
 
             while (true) { }
@@ -178,8 +182,22 @@ namespace CrossBuilder2
             }
         }
 
+        [MTAThread]
         public static async Task Main(string[] args)
         {
+            //var files = Traverse(@"D:\Toolchains\sysroot-glibc-linaro-2.23-2017.05-arm-linux-gnueabihf-2").ToList();
+
+            //foreach (var file in files)
+            //{
+            //    using (var stream = new BufferedStream(File.OpenRead(file), 100000))
+            //    {
+            //        SHA256Managed sha = new SHA256Managed();
+            //        byte[] checksum = sha.ComputeHash(stream);
+            //    }
+            //}
+
+            //Console.WriteLine($"Done: {files.Count}");
+
             var program = new Program();
 
             await Parser.Default.ParseArguments<InstallOptions, UninstallOptions>(args)
@@ -212,6 +230,38 @@ namespace CrossBuilder2
         {
             [Value(0, Required = true, HelpText = "Packages to uninstall.")]
             public override IEnumerable<string> Packages { get; set; }
+        }
+
+        private static IEnumerable<string> Traverse(string rootDirectory)
+        {
+            var files = Enumerable.Empty<string>();
+            var directories = Enumerable.Empty<string>();
+
+            try
+            {
+                // The test for UnauthorizedAccessException.
+                var permission = new FileIOPermission(FileIOPermissionAccess.PathDiscovery, rootDirectory);
+                permission.Demand();
+
+                files = Directory.GetFiles(rootDirectory);
+                directories = Directory.GetDirectories(rootDirectory);
+            }
+            catch
+            {
+                // Ignore folder (access denied).
+                rootDirectory = null;
+            }
+
+            foreach (var file in files)
+            {
+                yield return file;
+            }
+
+            // Recursive call for SelectMany.
+            foreach (var result in directories.SelectMany(Traverse))
+            {
+                yield return result;
+            }
         }
     }
 }
