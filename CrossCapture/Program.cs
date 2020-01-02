@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using static CrossCapture.WinEnum;
 
@@ -20,7 +21,7 @@ namespace CrossCapture
             spyMgr = new NktSpyMgr();
         }
 
-        public void Run()
+        public void Run(Action<IEnumerable<FileInfo>> onExit)
         {
             spyMgr.Initialize();
             hooks = spyMgr.CreateHooksCollection();
@@ -45,15 +46,11 @@ namespace CrossCapture
             pc.EnableRaisingEvents = true;
             pc.Exited += (sender, e) =>
             {
-                foreach (var fileName in fileNames)
-                {
-                    var file = new FileInfo(fileName);
+                var actualFiles = fileNames
+                    .Select(x => new FileInfo(x))
+                    .Where(x => !x.Name.Contains(":"));
 
-                    if (!file.Name.Contains(":"))
-                    {
-                        Console.WriteLine(file.FullName);
-                    }
-                }
+                onExit(actualFiles);
             };
         }
 
@@ -85,7 +82,14 @@ namespace CrossCapture
 
                 if (result > 0)
                 {
-                    return fileName.ToString();
+                    var fileNameStr = fileName.ToString();
+
+                    if (fileNameStr.StartsWith(@"\\?\"))
+                    {
+                        fileNameStr = fileNameStr.Substring(4);
+                    }
+
+                    return fileNameStr;
                 }
             }
             catch (Exception e)
@@ -131,7 +135,7 @@ namespace CrossCapture
 
         public static void Main(string[] args)
         {
-            new Program().Run();
+            new Program().Run(x => { });
 
             while (Console.ReadKey().Key != ConsoleKey.Escape);
         }
