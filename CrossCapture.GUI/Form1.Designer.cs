@@ -30,6 +30,7 @@
         {
             this.fileTree = new System.Windows.Forms.TreeView();
             this.panel1 = new System.Windows.Forms.Panel();
+            this.progressBar1 = new System.Windows.Forms.ProgressBar();
             this.nextButton = new System.Windows.Forms.Button();
             this.closeButton = new System.Windows.Forms.Button();
             this.expandAll = new System.Windows.Forms.Button();
@@ -39,7 +40,6 @@
             this.selectOutputDir = new System.Windows.Forms.Button();
             this.label2 = new System.Windows.Forms.Label();
             this.prefixText = new System.Windows.Forms.TextBox();
-            this.progressBar1 = new System.Windows.Forms.ProgressBar();
             this.panel1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -67,6 +67,15 @@
             this.panel1.Name = "panel1";
             this.panel1.Size = new System.Drawing.Size(628, 48);
             this.panel1.TabIndex = 1;
+            // 
+            // progressBar1
+            // 
+            this.progressBar1.Location = new System.Drawing.Point(21, 13);
+            this.progressBar1.Name = "progressBar1";
+            this.progressBar1.Size = new System.Drawing.Size(256, 23);
+            this.progressBar1.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
+            this.progressBar1.TabIndex = 5;
+            this.progressBar1.Visible = false;
             // 
             // nextButton
             // 
@@ -125,6 +134,7 @@
             this.outputDirectory.Name = "outputDirectory";
             this.outputDirectory.Size = new System.Drawing.Size(542, 23);
             this.outputDirectory.TabIndex = 1;
+            this.outputDirectory.Text = "D:\\Toolchains\\sysroot-glibc-linaro-2.23-2017.05-arm-linux-gnueabihf-2";
             // 
             // selectOutputDir
             // 
@@ -151,15 +161,6 @@
             this.prefixText.Name = "prefixText";
             this.prefixText.Size = new System.Drawing.Size(586, 23);
             this.prefixText.TabIndex = 1;
-            // 
-            // progressBar1
-            // 
-            this.progressBar1.Location = new System.Drawing.Point(21, 13);
-            this.progressBar1.Name = "progressBar1";
-            this.progressBar1.Size = new System.Drawing.Size(256, 23);
-            this.progressBar1.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
-            this.progressBar1.TabIndex = 5;
-            this.progressBar1.Visible = false;
             // 
             // Form1
             // 

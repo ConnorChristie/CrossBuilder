@@ -12,7 +12,7 @@ namespace CrossCapture.GUI.Core
         ///  The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             //var fakes = new List<FileInfo>()
             //{
@@ -29,10 +29,20 @@ namespace CrossCapture.GUI.Core
             //Application.SetCompatibleTextRenderingDefault(false);
             //Application.Run(new Form1(fakes));
 
+            if (args.Length < 1)
+            {
+                Console.WriteLine("Usage: CrossCapture.GUI.exe <program> [arguments]");
+                return;
+            }
+
+            var program = args[0];
+            var arguments = args.Length > 1 ? string.Join(' ', args.AsSpan().Slice(1).ToArray()) : "";
+            var workingDir = Directory.GetCurrentDirectory();
+
             var autoEvent = new AutoResetEvent(false);
             IEnumerable<FileInfo> files = null;
 
-            new CrossCapture.Program().Run(x =>
+            new ProcessCapture(program, arguments, workingDir).Capture(x =>
             {
                 files = x;
                 autoEvent.Set();

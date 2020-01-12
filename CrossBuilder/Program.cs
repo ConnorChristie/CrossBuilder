@@ -87,6 +87,12 @@ namespace CrossBuilder2
 
             var installCount = PackageQueue.Count;
 
+            if (installCount == 0)
+            {
+                Console.WriteLine($"Could not find any packages matching '{string.Join(", ", opts.Packages)}'");
+                return;
+            }
+
             Console.WriteLine($"About to download and install {installCount} packages.");
 
             foreach (var package in PackageQueue.Values)
@@ -182,28 +188,32 @@ namespace CrossBuilder2
             }
         }
 
-        [MTAThread]
+        public async Task Inspect(InspectOptions opts)
+        {
+            Console.WriteLine($"Information about '{opts.FileName}':");
+
+            var elfReader = new ElfReader();
+
+            if (elfReader.TryProcessElfFile(opts.FileName, out var soName, out var depends))
+            {
+                Console.WriteLine($"  SoName: {soName}");
+                Console.WriteLine($"  Depends: {string.Join(", ", depends)}");
+
+                return;
+            }
+
+            Console.WriteLine("  Unknown file.");
+        }
+
         public static async Task Main(string[] args)
         {
-            //var files = Traverse(@"D:\Toolchains\sysroot-glibc-linaro-2.23-2017.05-arm-linux-gnueabihf-2").ToList();
-
-            //foreach (var file in files)
-            //{
-            //    using (var stream = new BufferedStream(File.OpenRead(file), 100000))
-            //    {
-            //        SHA256Managed sha = new SHA256Managed();
-            //        byte[] checksum = sha.ComputeHash(stream);
-            //    }
-            //}
-
-            //Console.WriteLine($"Done: {files.Count}");
-
             var program = new Program();
 
-            await Parser.Default.ParseArguments<InstallOptions, UninstallOptions>(args)
+            await Parser.Default.ParseArguments<InstallOptions, UninstallOptions, InspectOptions>(args)
                 .MapResult(
                     (InstallOptions opts) => program.Install(opts),
                     (UninstallOptions opts) => program.Uninstall(opts),
+                    (InspectOptions opts) => program.Inspect(opts),
                     errs => Task.FromResult(0));
         }
 
@@ -232,7 +242,14 @@ namespace CrossBuilder2
             public override IEnumerable<string> Packages { get; set; }
         }
 
-        private static IEnumerable<string> Traverse(string rootDirectory)
+        [Verb("inspect", HelpText = "Inspects a file.")]
+        public class InspectOptions
+        {
+            [Value(0, Required = true, HelpText = "File to inspect.")]
+            public string FileName { get; set; }
+        }
+
+        private static void Traverse(string rootDirectory, IList<FileInfo> fileList)
         {
             var files = Enumerable.Empty<string>();
             var directories = Enumerable.Empty<string>();
@@ -248,19 +265,16 @@ namespace CrossBuilder2
             }
             catch
             {
-                // Ignore folder (access denied).
-                rootDirectory = null;
             }
 
             foreach (var file in files)
             {
-                yield return file;
+                fileList.Add(new FileInfo(file));
             }
 
-            // Recursive call for SelectMany.
-            foreach (var result in directories.SelectMany(Traverse))
+            foreach (var directory in directories)
             {
-                yield return result;
+                Traverse(directory, fileList);
             }
         }
     }
