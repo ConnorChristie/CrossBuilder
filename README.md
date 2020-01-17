@@ -5,10 +5,9 @@ This contains several utilities for cross compiling native projects on a Windows
 * Dependency fetcher that emulates `apt-get`
     * Downloads packages directly to the host computer instead of downloading them first to the target and copying them over.
     * Prevents having to install dev packages on the target machine.
-* File capture that tracks written files when using commands such as `make install`
+* File catcher that tracks written files when using commands such as `make install`
     * Most cmake projects don't respect the install directory and instead write their files to all different directories.
     * Allows you to copy captured files to your sysroot or staging directory.
-
 
 ## Building OpenCV
 
@@ -35,6 +34,24 @@ This contains several utilities for cross compiling native projects on a Windows
     * Manually create `libdl.so` inside `/lib`
     * Manually create `librt.so` inside `/lib`
     * Manually create `libpthread.so` inside `/lib`
+
+4. Clone the [OpenCV](https://github.com/opencv/opencv) project and run CMake inside build directory:
+
+    ```sh
+    cmake -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=D:\Git\CrossBuilder\armhf.toolchain.cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_EXAMPLES=OFF -DBUILD_DOCS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_TESTS=OFF -DWITH_GSTREAMER=ON -DWITH_GTK=ON ..
+    ```
+
+5. Build the project:
+
+    ```sh
+    make -j10
+    ```
+
+5. Capture the installed files to be used in the sysroot:
+
+    ```sh
+    FileCatcher.exe make install
+    ```
 
 ## Troubleshooting:
 
