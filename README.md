@@ -119,6 +119,14 @@ This contains several utilities for cross compiling native projects on a Windows
     FileCatcher.exe make install
     ```
 
+## Building the example app
+
+1. Install dependencies
+
+    ```sh
+    CrossBuilder.exe install -s "D:\Toolchains\sysroot-glibc-linaro-2.23-2017.05-arm-linux-gnueabihf" ti-tidl
+    ```
+
 ## Troubleshooting
 
 ### undefined reference to `__dlsym'

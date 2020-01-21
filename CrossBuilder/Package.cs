@@ -131,7 +131,7 @@ namespace CrossBuilder
 
                         if (doLink)
                         {
-                            file.CreateSymbolicLink(soSymlinkName, false);
+                            file.CreateSymbolicLink(soSymlinkName, true);
 
                             var doLibLink = true;
                             var libPath = soSymlink.Directory.FullName + Path.DirectorySeparatorChar + soName.Substring(0, soName.LastIndexOf(".so") + 3);
@@ -155,7 +155,7 @@ namespace CrossBuilder
 
                             if (doLibLink)
                             {
-                                soSymlink.CreateSymbolicLink(libPath, false);
+                                soSymlink.CreateSymbolicLink(libPath, true);
                             }
                         }
                     }
