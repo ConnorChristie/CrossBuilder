@@ -1,5 +1,6 @@
 ﻿using ELFSharp.ELF;
 using ELFSharp.ELF.Sections;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,6 +9,8 @@ namespace CrossBuilder
 {
     public class ElfReader
     {
+        private readonly ILogger Logger = LogManager.GetCurrentClassLogger();
+
         public bool TryProcessElfFile(string filePath, out string soName, out IList<string> depends)
         {
             try
@@ -30,8 +33,7 @@ namespace CrossBuilder
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Failed to process ELF file: {filePath}");
-                Console.WriteLine(e);
+                Logger.Error(e, $"Failed to process ELF file: {filePath}");
             }
 
             soName = null;

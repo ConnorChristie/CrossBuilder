@@ -1,6 +1,7 @@
 ﻿using CrossBuilder.Deb;
 using CrossBuilder.Downloaders;
 using DebHelper;
+using NLog;
 using SymbolicLinkSupport;
 using System;
 using System.Collections.Generic;
@@ -29,6 +30,7 @@ namespace CrossBuilder
         // ========================================
 
         public Repository Repository;
+        private readonly ILogger Logger;
 
         private readonly IRemoteDownloader downloader;
         private readonly ElfReader elfReader;
@@ -38,6 +40,7 @@ namespace CrossBuilder
         public Package(Repository repository)
         {
             Repository = repository;
+            Logger = LogManager.GetCurrentClassLogger();
             downloader = new HttpRemoteDownloader();
             elfReader = new ElfReader();
         }
@@ -76,7 +79,7 @@ namespace CrossBuilder
             {
                 // TODO: Do we need to delete all the symlinks pointing to these files?
 
-                Console.WriteLine($"Removing: {file}");
+                Logger.Info($"Removing: {file}");
 
                 File.Delete(sysroot + Path.DirectorySeparatorChar + file);
             }
@@ -117,7 +120,7 @@ namespace CrossBuilder
 
                             if (CompareLibVersions(file.Name, existingTarget.Name) > 0)
                             {
-                                Console.WriteLine($"[INFO] Updating symlink '{soSymlink.Name}' from '{existingTarget.Name}' to '{file.Name}'");
+                                Logger.Debug($"Updating symlink '{soSymlink.Name}' from '{existingTarget.Name}' to '{file.Name}'");
 
                                 soSymlink.Delete();
                             }
@@ -143,7 +146,7 @@ namespace CrossBuilder
 
                                 if (existingTarget.Name != soSymlink.Name)
                                 {
-                                    Console.WriteLine($"[INFO] Updating library symlink '{libFile.Name}' from '{existingTarget.Name}' to '{soSymlink.Name}'");
+                                    Logger.Debug($"Updating library symlink '{libFile.Name}' from '{existingTarget.Name}' to '{soSymlink.Name}'");
 
                                     libFile.Delete();
                                 }
@@ -267,8 +270,8 @@ namespace CrossBuilder
 
                     if (depSegment.Package.EndsWith(":any"))
                     {
-                        Console.WriteLine($"[WARNING] Package '{depSegment.Package}' was configured for 'multi-arch' support but used the package name to symbolize that.");
-                        Console.WriteLine("  Aka we are removing the ':any' from the name and matching against that instead.");
+                        Logger.Warn($"Package '{depSegment.Package}' was configured for 'multi-arch' support but used the package name to symbolize that.");
+                        Logger.Warn("  Aka we are removing the ':any' from the name and matching against that instead.");
 
                         depSegment.Package = depSegment.Package.Replace(":any", "");
                     }

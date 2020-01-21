@@ -1,4 +1,5 @@
 ﻿using DebHelper.Implementation;
+using NLog;
 using SharpCompress.Common;
 using SharpCompress.Readers;
 using System;
@@ -16,6 +17,8 @@ namespace DebHelper
         protected readonly InnerFile debianBinary;
         protected readonly InnerFile control;
         protected readonly InnerFile data;
+
+        private readonly ILogger Logger = LogManager.GetCurrentClassLogger();
 
         public DebReader(string path)
         {
@@ -69,7 +72,7 @@ namespace DebHelper
                     WriteSymbolicLink = (symlinkName, destination) =>
                     {
                         // TODO: The ldconfig logic handles the symlink creation for so files. We might need to keep this for non-so files?
-                        Console.WriteLine($"[TRACE] Skipping symlink extraction for '{new FileInfo(symlinkName).Name}'");
+                        Logger.Debug($"Skipping symlink extraction for '{new FileInfo(symlinkName).Name}'");
 
                         //var symlink = new FileInfo(symlinkName);
                         //var origFile = new FileInfo(symlink.Directory.FullName + Path.DirectorySeparatorChar + destination);
@@ -88,7 +91,7 @@ namespace DebHelper
 
                 if (!overwrite && !wasExtracted && outFile.Exists)
                 {
-                    Console.WriteLine($"[TRACE] Skipping extraction of '{outFile.Name}' because the file already exists and overwrite is false.");
+                    Logger.Debug($"Skipping extraction of '{outFile.Name}' because the file already exists and overwrite is false.");
                 }
 
                 if (wasExtracted)

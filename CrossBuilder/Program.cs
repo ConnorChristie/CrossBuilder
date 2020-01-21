@@ -1,26 +1,26 @@
 ﻿using CommandLine;
-using CrossBuilder;
 using CrossBuilder.Deb;
+using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Security.Permissions;
 using System.Threading.Tasks;
 
-namespace CrossBuilder2
+namespace CrossBuilder
 {
     public class Program
     {
         private readonly ConcurrentDictionary<string, Package> PackageQueue;
         private readonly Stopwatch StopWatch = new Stopwatch();
 
+        private readonly ILogger Logger;
         private readonly Browser Browser;
 
         public Program()
         {
+            Logger = LogManager.GetCurrentClassLogger();
             PackageQueue = new ConcurrentDictionary<string, Package>();
 
             Browser = new Browser("stretch", "armhf");
@@ -63,7 +63,7 @@ namespace CrossBuilder2
 
             Directory.CreateDirectory(opts.Sysroot);
 
-            Console.WriteLine($"Installing packages to '{opts.Sysroot}'");
+            Logger.Info($"Installing packages to '{opts.Sysroot}'");
 
             await Browser.UpdatePackageCache();
 
@@ -78,7 +78,7 @@ namespace CrossBuilder2
 
                 if (basePackage == null)
                 {
-                    Console.WriteLine($"Could not find package '{packageName}'");
+                    Logger.Error($"Could not find package '{packageName}'");
                     continue;
                 }
 
@@ -89,29 +89,28 @@ namespace CrossBuilder2
 
             if (installCount == 0)
             {
-                Console.WriteLine($"Could not find any packages matching '{string.Join(", ", opts.Packages)}'");
+                Logger.Error($"Could not find any packages matching '{string.Join(", ", opts.Packages)}'");
                 return;
             }
 
-            Console.WriteLine($"About to download and install {installCount} packages.");
+            Logger.Info($"About to download and install {installCount} packages.");
 
             foreach (var package in PackageQueue.Values)
             {
-                Console.WriteLine($"Downloading {package.PackageName}...");
+                Logger.Info($"About to install {package.PackageName}...");
 
 #pragma warning disable CS4014
                 package.DownloadAndDecompress(opts.Sysroot, opts.Force, ignoreCached: false).ContinueWith(t =>
                 {
                     if (!t.IsFaulted)
                     {
-                        Console.WriteLine($"Downloaded and installed {package}");
+                        Logger.Info($"Installed {package}");
                     }
                     else
                     {
                         // TODO: Should probably retry
 
-                        Console.WriteLine($"Failed to install package '{package.PackageName}'");
-                        Console.WriteLine(t.Exception);
+                        Logger.Error(t.Exception, $"Failed to install package '{package.PackageName}'");
                     }
 
                     PackageQueue.TryRemove(package.SHA256, out _);
@@ -136,13 +135,13 @@ namespace CrossBuilder2
                 ts.Minutes, ts.Seconds,
                 ts.Milliseconds / 10);
 
-            Console.WriteLine($"Finished installing {string.Join(", ", packages)}");
-            Console.WriteLine($"Total time to install {installCount} packages: {elapsedTime}");
+            Logger.Info($"Finished installing {string.Join(", ", packages)}");
+            Logger.Info($"Total time to install {installCount} packages: {elapsedTime}");
 
             Environment.Exit(0);
         }
 
-        private static async Task RecursivelyFindDependencies(ConcurrentDictionary<string, Package> packageQueue, Browser browser, Package package)
+        private async Task RecursivelyFindDependencies(ConcurrentDictionary<string, Package> packageQueue, Browser browser, Package package)
         {
             if (packageQueue.ContainsKey(package.SHA256))
             {
@@ -157,7 +156,7 @@ namespace CrossBuilder2
 
                 if (depPackage == null)
                 {
-                    Console.WriteLine($"Could not resolve dependency: {dep.OrList[0].Package} ({dep.OrList[0].Package})");
+                    Logger.Warn($"Could not resolve dependency: {dep.OrList[0].Package} ({dep.OrList[0].Package})");
                     continue;
                 }
 
@@ -180,7 +179,7 @@ namespace CrossBuilder2
 
                 if (package == null)
                 {
-                    Console.WriteLine($"Could not find package '{packageName}'");
+                    Logger.Warn($"Could not find package '{packageName}'");
                     continue;
                 }
 
@@ -190,19 +189,19 @@ namespace CrossBuilder2
 
         public async Task Inspect(InspectOptions opts)
         {
-            Console.WriteLine($"Information about '{opts.FileName}':");
+            Logger.Info($"Information about '{opts.FileName}':");
 
             var elfReader = new ElfReader();
 
             if (elfReader.TryProcessElfFile(opts.FileName, out var soName, out var depends))
             {
-                Console.WriteLine($"  SoName: {soName}");
-                Console.WriteLine($"  Depends: {string.Join(", ", depends)}");
+                Logger.Info($"  SoName: {soName}");
+                Logger.Info($"  Depends: {string.Join(", ", depends)}");
 
                 return;
             }
 
-            Console.WriteLine("  Unknown file.");
+            Logger.Info("  Unknown file.");
         }
 
         public static async Task Main(string[] args)
@@ -210,6 +209,10 @@ namespace CrossBuilder2
             var program = new Program();
 
             await Parser.Default.ParseArguments<InstallOptions, UninstallOptions, InspectOptions>(args)
+                .WithParsed<Options>(x =>
+                {
+                    LogManager.GlobalThreshold = x.Verbose ? LogLevel.Debug : LogLevel.Info;
+                })
                 .MapResult(
                     (InstallOptions opts) => program.Install(opts),
                     (UninstallOptions opts) => program.Uninstall(opts),
@@ -226,6 +229,9 @@ namespace CrossBuilder2
 
             [Option('s', "sysroot", Default = "fsNew", HelpText = "Base path to install packages to.")]
             public string Sysroot { get; set; }
+
+            [Option('v', "verbose", HelpText = "Enables verbose logging.")]
+            public bool Verbose { get; set; }
         }
 
         [Verb("install", HelpText = "Installs a package.")]
@@ -247,35 +253,6 @@ namespace CrossBuilder2
         {
             [Value(0, Required = true, HelpText = "File to inspect.")]
             public string FileName { get; set; }
-        }
-
-        private static void Traverse(string rootDirectory, IList<FileInfo> fileList)
-        {
-            var files = Enumerable.Empty<string>();
-            var directories = Enumerable.Empty<string>();
-
-            try
-            {
-                // The test for UnauthorizedAccessException.
-                var permission = new FileIOPermission(FileIOPermissionAccess.PathDiscovery, rootDirectory);
-                permission.Demand();
-
-                files = Directory.GetFiles(rootDirectory);
-                directories = Directory.GetDirectories(rootDirectory);
-            }
-            catch
-            {
-            }
-
-            foreach (var file in files)
-            {
-                fileList.Add(new FileInfo(file));
-            }
-
-            foreach (var directory in directories)
-            {
-                Traverse(directory, fileList);
-            }
         }
     }
 }

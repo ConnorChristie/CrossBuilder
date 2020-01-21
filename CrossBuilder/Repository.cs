@@ -1,4 +1,5 @@
 ﻿using CrossBuilder.Downloaders;
+using NLog;
 using SharpCompress.Compressors;
 using SharpCompress.Compressors.BZip2;
 using SharpCompress.Compressors.Deflate;
@@ -19,10 +20,12 @@ namespace CrossBuilder
         public string Component { get; set; }
         public string Architecture { get; set; }
 
+        private readonly ILogger Logger;
         private readonly IRemoteDownloader downloader;
 
         public Repository()
         {
+            Logger = LogManager.GetCurrentClassLogger();
             downloader = new HttpRemoteDownloader();
         }
 
@@ -98,19 +101,19 @@ namespace CrossBuilder
         private Stream GetRemoteFileMaybeCompressed(string path)
         {
             try { return new GZipStream(downloader.DownloadFile($"{path}.gz"), CompressionMode.Decompress); }
-            catch { Console.WriteLine("Didn't find a .gz compressed file."); }
+            catch { Logger.Debug("Didn't find a .gz compressed file."); }
 
             try { return new BZip2Stream(downloader.DownloadFile($"{path}.bz2"), CompressionMode.Decompress, true); }
-            catch { Console.WriteLine("Didn't find a .bz2 compressed file."); }
+            catch { Logger.Debug("Didn't find a .bz2 compressed file."); }
 
             try { return new LZipStream(downloader.DownloadFile($"{path}.lzma"), CompressionMode.Decompress); }
-            catch { Console.WriteLine("Didn't find a .lzma compressed file."); }
+            catch { Logger.Debug("Didn't find a .lzma compressed file."); }
 
             try { return new XZStream(downloader.DownloadFile($"{path}.xz")); }
-            catch { Console.WriteLine("Didn't find a .xz compressed file."); }
+            catch { Logger.Debug("Didn't find a .xz compressed file."); }
 
             try { return downloader.DownloadFile(path); }
-            catch { Console.WriteLine("Didn't find an uncompressed file."); }
+            catch { Logger.Debug("Didn't find an uncompressed file."); }
 
             throw new Exception("Failed to find any matching files (checked for xz, gz, bz2, lzma, and uncompressed).");
         }
