@@ -60,7 +60,7 @@ namespace CrossBuilder
             // TODO: do we need the control files for anything? it does have the md5sums in there
 
             var reader = new DebReader(GetCachedPath(debCachePath));
-            reader.DecompressData(sysroot, overwrite, OnFileDecompressed);
+            reader.DecompressData(sysroot, overwrite, HandleLibrarySymlinks);
         }
 
         public void Uninstall(string sysroot)
@@ -85,7 +85,7 @@ namespace CrossBuilder
             }
         }
 
-        private void OnFileDecompressed(FileInfo file)
+        private void HandleLibrarySymlinks(FileInfo file)
         {
             if (file.Name.Contains(".so") && elfReader.TryProcessElfFile(file.FullName, out var soName, out var depends))
             {
@@ -94,7 +94,6 @@ namespace CrossBuilder
                     return;
                 }
 
-                // Only create a symlink if the soname differs from the current file name
                 if (soName != file.Name)
                 {
                     string soSymlinkName = null;
@@ -116,11 +115,11 @@ namespace CrossBuilder
 
                         if (soSymlink.Exists)
                         {
-                            var existingTarget = new FileInfo(soSymlink.GetSymbolicLinkTarget());
+                            var existingTarget = soSymlink.IsSymbolicLink() ? new FileInfo(soSymlink.GetSymbolicLinkTarget()) : soSymlink;
 
                             if (CompareLibVersions(file.Name, existingTarget.Name) > 0)
                             {
-                                Logger.Debug($"Updating symlink '{soSymlink.Name}' from '{existingTarget.Name}' to '{file.Name}'");
+                                Logger.Debug($"[{PackageName}] Updating symlink '{soSymlink.Name}' from '{existingTarget.Name}' to '{file.Name}'");
 
                                 soSymlink.Delete();
                             }
@@ -146,7 +145,7 @@ namespace CrossBuilder
 
                                 if (existingTarget.Name != soSymlink.Name)
                                 {
-                                    Logger.Debug($"Updating library symlink '{libFile.Name}' from '{existingTarget.Name}' to '{soSymlink.Name}'");
+                                    Logger.Debug($"[{PackageName}] Updating library symlink '{libFile.Name}' from '{existingTarget.Name}' to '{soSymlink.Name}'");
 
                                     libFile.Delete();
                                 }

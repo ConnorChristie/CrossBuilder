@@ -2,6 +2,7 @@
 using NLog;
 using SharpCompress.Common;
 using SharpCompress.Readers;
+using SymbolicLinkSupport;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -56,7 +57,11 @@ namespace DebHelper
             }
         }
 
-        private void DecompressArchive(string outFolder, InnerFile innerFile, bool overwrite = false, Action<FileInfo> onFileDecompressed = null)
+        private void DecompressArchive(
+            string outFolder,
+            InnerFile innerFile,
+            bool overwrite = false,
+            Action<FileInfo> onFileDecompressed = null)
         {
             Directory.CreateDirectory(outFolder);
 
@@ -71,18 +76,15 @@ namespace DebHelper
                 {
                     WriteSymbolicLink = (symlinkName, destination) =>
                     {
-                        // TODO: The ldconfig logic handles the symlink creation for so files. We might need to keep this for non-so files?
-                        Logger.Debug($"Skipping symlink extraction for '{new FileInfo(symlinkName).Name}'");
+                        var symlink = new FileInfo(symlinkName);
+                        var origFile = new FileInfo(symlink.Directory.FullName + Path.DirectorySeparatorChar + destination);
 
-                        //var symlink = new FileInfo(symlinkName);
-                        //var origFile = new FileInfo(symlink.Directory.FullName + Path.DirectorySeparatorChar + destination);
+                        if (symlink.Exists)
+                        {
+                            symlink.Delete();
+                        }
 
-                        //if (symlink.Exists)
-                        //{
-                        //    symlink.Delete();
-                        //}
-
-                        //origFile.CreateSymbolicLink(symlinkName, false);
+                        origFile.CreateSymbolicLink(symlinkName, false);
                     },
                     Overwrite = overwrite,
                     ExtractFullPath = true,

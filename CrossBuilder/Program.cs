@@ -187,7 +187,7 @@ namespace CrossBuilder
             }
         }
 
-        public async Task Inspect(InspectOptions opts)
+        public async Task Inspect(InfoOptions opts)
         {
             Logger.Info($"Information about '{opts.FileName}':");
 
@@ -208,7 +208,7 @@ namespace CrossBuilder
         {
             var program = new Program();
 
-            await Parser.Default.ParseArguments<InstallOptions, UninstallOptions, InspectOptions>(args)
+            await Parser.Default.ParseArguments<InstallOptions, UninstallOptions, InfoOptions>(args)
                 .WithParsed<Options>(x =>
                 {
                     LogManager.GlobalThreshold = x.Verbose ? LogLevel.Debug : LogLevel.Info;
@@ -216,7 +216,7 @@ namespace CrossBuilder
                 .MapResult(
                     (InstallOptions opts) => program.Install(opts),
                     (UninstallOptions opts) => program.Uninstall(opts),
-                    (InspectOptions opts) => program.Inspect(opts),
+                    (InfoOptions opts) => program.Inspect(opts),
                     errs => Task.FromResult(0));
         }
 
@@ -248,8 +248,8 @@ namespace CrossBuilder
             public override IEnumerable<string> Packages { get; set; }
         }
 
-        [Verb("inspect", HelpText = "Inspects a file.")]
-        public class InspectOptions
+        [Verb("info", HelpText = "Inspects a file.")]
+        public class InfoOptions
         {
             [Value(0, Required = true, HelpText = "File to inspect.")]
             public string FileName { get; set; }
