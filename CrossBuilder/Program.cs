@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace CrossBuilder
@@ -183,25 +184,59 @@ namespace CrossBuilder
                     continue;
                 }
 
-                package.Uninstall(opts.Sysroot);
+                await package.Uninstall(opts.Sysroot);
             }
         }
 
-        public async Task Inspect(InfoOptions opts)
+        public async Task Info(InfoOptions opts)
         {
-            Logger.Info($"Information about '{opts.FileName}':");
+            Logger.Info($"Information about '{opts.FileOrPackageName}':");
 
             var elfReader = new ElfReader();
 
-            if (elfReader.TryProcessElfFile(opts.FileName, out var soName, out var depends))
+            if (File.Exists(opts.FileOrPackageName) && elfReader.TryProcessElfFile(opts.FileOrPackageName, out var soName, out var depends))
             {
-                Logger.Info($"  SoName: {soName}");
-                Logger.Info($"  Depends: {string.Join(", ", depends)}");
+                Logger.Info($"SoName: {soName}");
+                Logger.Info($"Depends: {string.Join(", ", depends)}");
 
                 return;
             }
 
-            Logger.Info("  Unknown file.");
+            await Browser.UpdatePackageCache();
+
+            var package = Browser.FindPackage(new Dependency(new Dependency.IndividualDependency
+            {
+                Package = opts.FileOrPackageName,
+                Comparer = Comparer.NoOp,
+                Version = ""
+            }));
+
+            if (package == null)
+            {
+                Logger.Error($"Could not find file or package '{opts.FileOrPackageName}'");
+                return;
+            }
+
+            Logger.Info($"Package: {package}");
+
+            var deps = new ConcurrentDictionary<string, Package>();
+            await RecursivelyFindDependencies(deps, Browser, package);
+
+            Logger.Info($"Has {deps.Count} dependencies");
+
+            foreach (var dep in deps)
+            {
+                Logger.Info($"- {dep.Value}");
+            }
+
+            var files = (await package.GetFileList()).ToList();
+
+            Logger.Info($"Installs the following {files.Count} files:");
+
+            foreach (var file in files)
+            {
+                Logger.Info($"- {file}");
+            }
         }
 
         public static async Task Main(string[] args)
@@ -216,7 +251,7 @@ namespace CrossBuilder
                 .MapResult(
                     (InstallOptions opts) => program.Install(opts),
                     (UninstallOptions opts) => program.Uninstall(opts),
-                    (InfoOptions opts) => program.Inspect(opts),
+                    (InfoOptions opts) => program.Info(opts),
                     errs => Task.FromResult(0));
         }
 
@@ -251,8 +286,8 @@ namespace CrossBuilder
         [Verb("info", HelpText = "Inspects a file.")]
         public class InfoOptions
         {
-            [Value(0, Required = true, HelpText = "File to inspect.")]
-            public string FileName { get; set; }
+            [Value(0, Required = true, HelpText = "File or package to get information about.")]
+            public string FileOrPackageName { get; set; }
         }
     }
 }

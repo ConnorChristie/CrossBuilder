@@ -2,7 +2,7 @@
   "profiles": {
     "CrossBuilder": {
       "commandName": "Project",
-      "commandLineArgs": "install libtiopencl1"
+      "commandLineArgs": "install -s \"D:\\Toolchains\\beaglebone-sysroot-glibc-linaro-2.23-2017.05-arm-linux-gnueabihf\" python-dev"
     }
   }
 }

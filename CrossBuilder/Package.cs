@@ -47,6 +47,27 @@ namespace CrossBuilder
 
         public async Task DownloadAndDecompress(string sysroot, bool overwrite, bool ignoreCached = false)
         {
+            // TODO: Bust cache if it's been too long or hash doesn't match anymore
+            // TODO: do we need the control files for anything? it does have the md5sums in there
+
+            var reader = new DebReader(await GetPackageFile(ignoreCached));
+            reader.DecompressData(sysroot, overwrite, HandleLibrarySymlinks);
+        }
+
+        public async Task Uninstall(string sysroot)
+        {
+            foreach (var file in await GetFileList())
+            {
+                // TODO: Do we need to delete all the symlinks pointing to these files?
+
+                Logger.Info($"Removing: {file}");
+
+                File.Delete(sysroot + Path.DirectorySeparatorChar + file);
+            }
+        }
+
+        private async Task<string> GetPackageFile(bool ignoreCached)
+        {
             var debCachePath = "packages" + Path.DirectorySeparatorChar + Filename;
 
             if (ignoreCached || !IsCached(debCachePath))
@@ -56,33 +77,14 @@ namespace CrossBuilder
                 await CacheFile(debCachePath, fileStream);
             }
 
-            // TODO: Bust cache if it's been too long or hash doesn't match anymore
-            // TODO: do we need the control files for anything? it does have the md5sums in there
-
-            var reader = new DebReader(GetCachedPath(debCachePath));
-            reader.DecompressData(sysroot, overwrite, HandleLibrarySymlinks);
+            return GetCachedPath(debCachePath);
         }
 
-        public void Uninstall(string sysroot)
+        public async Task<IEnumerable<string>> GetFileList()
         {
-            var debCachePath = "packages" + Path.DirectorySeparatorChar + Filename;
+            var reader = new DebReader(await GetPackageFile(false));
 
-            if (!IsCached(debCachePath))
-            {
-                // TODO: Maybe re-download the package so we can get the list of files it extracted?
-                throw new Exception($"The package '{PackageName}' is no longer cached so we can't figure out what files it laid down.");
-            }
-
-            var reader = new DebReader(GetCachedPath(debCachePath));
-
-            foreach (var file in reader.GetDataFileList())
-            {
-                // TODO: Do we need to delete all the symlinks pointing to these files?
-
-                Logger.Info($"Removing: {file}");
-
-                File.Delete(sysroot + Path.DirectorySeparatorChar + file);
-            }
+            return reader.GetDataFileList();
         }
 
         private void HandleLibrarySymlinks(FileInfo file)
