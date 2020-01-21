@@ -30,10 +30,11 @@ int main(int argc, char* argv[])
     std::cout << "Hello world" << std::endl;
 
     Configuration c;
+    uint32_t num_eve = Executor::GetNumDevices(DeviceType::EVE);
     uint32_t num_dsp = Executor::GetNumDevices(DeviceType::DSP);
     // unique_ptr<Executor> e_dsp(CreateExecutor(DeviceType::DSP, num_dsp, c));
 
-    std::cout << "Num DSPs: " << num_dsp << std::endl;
+    std::cout << "Num DSPs: " << num_dsp << ", Num EVEs: " << num_eve << std::endl;
 
     return 0;
 }
